@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>LINE絵文字一括カッター (ブラウザ完結版)</title>
+  <!-- Local & Offline JSZip library -->
+  <script src="jszip.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1>
+        <span>LINE絵文字一括カッター</span>
+        <span class="badge">Webブラウザ完結版</span>
+      </h1>
+      <p>サーバー通信なし・完全ブラウザ内で安全かつ高速に処理！<br>AI生成グリッド画像から、LINE絵文字仕様（180×180px透過PNG、tab 96×74px）を一括切り出し・整形・ZIP保存します。</p>
+    </header>
+
+    <!-- Main Controller Card -->
+    <main class="card">
+      <h2 class="card-title">1. 画像の選択と切り出し設定</h2>
+
+      <!-- File Upload Area -->
+      <div class="dropzone" id="dropzone">
+        <div class="dropzone-icon">📁</div>
+        <div class="dropzone-text">ここに画像ファイルをドラッグ＆ドロップ</div>
+        <div class="dropzone-subtext">またはタップして写真・ファイルを選択（PNG, JPG, JPEG）</div>
+        <input type="file" id="file-input" accept="image/png, image/jpeg, image/jpg, image/webp">
+      </div>
+
+      <!-- Mode Tabs -->
+      <div style="margin-top: 24px;">
+        <div class="mode-tabs">
+          <button type="button" class="mode-tab-btn active" id="tab-grid-mode">
+            📐 グリッド分割・微調整モード
+          </button>
+          <button type="button" class="mode-tab-btn" id="tab-free-mode">
+            ✂️ 特定画像フリー選択モード
+          </button>
+        </div>
+      </div>
+
+      <!-- Mode A: Grid Controls -->
+      <div id="grid-controls-panel">
+        <div class="controls-grid">
+          <div class="control-group">
+            <label for="cols-input">
+              横のマス数（列 / Columns）:
+              <span class="val-display" id="cols-val">5</span>
+            </label>
+            <input type="number" id="cols-input" class="input-number" min="1" max="20" value="5">
+          </div>
+
+          <div class="control-group">
+            <label for="rows-input">
+              縦のマス数（行 / Rows）:
+              <span class="val-display" id="rows-val">8</span>
+            </label>
+            <input type="number" id="rows-input" class="input-number" min="1" max="20" value="8">
+          </div>
+        </div>
+
+        <!-- Presets -->
+        <div class="presets">
+          <span style="font-size: 0.85rem; color: #6b7280; font-weight: 600;">おすすめプリセット:</span>
+          <button type="button" class="preset-btn" data-cols="5" data-rows="8">5列 × 8行（40個）</button>
+          <button type="button" class="preset-btn" data-cols="4" data-rows="5">4列 × 5行（20個）</button>
+          <button type="button" class="preset-btn" data-cols="5" data-rows="4">5列 × 4行（20個）</button>
+          <button type="button" class="preset-btn" data-cols="4" data-rows="4">4列 × 4行（16個）</button>
+        </div>
+      </div>
+
+      <!-- Mode B: Free Select Controls -->
+      <div id="free-controls-panel" style="display: none; margin-top: 12px;">
+        <p style="font-size: 0.95rem; color: #4b5563;">
+          🖱️ <strong>操作方法:</strong> 下の画像プレビュー上をドラッグ（またはスワイプ）して、切り出したい範囲（四角形）を自由に指定してください。複数指定できます。
+        </p>
+      </div>
+
+      <!-- Processing Options -->
+      <div class="options-box">
+        <div style="font-size: 0.95rem; font-weight: 700; margin-bottom: 12px; color: #111827;">
+          ⚙️ 画像加工・整形オプション
+        </div>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="opt-auto-center" checked>
+          <span>キャラクターを自動で中央に配置する（Auto-Center）</span>
+        </label>
+        <p style="font-size: 0.8rem; color: #6b7280; margin-left: 28px; margin-top: 2px;">
+          マス内でキャラが偏っていても、オブジェクトの描画領域を検知して180×180pxの中心にピタッと配置します。
+        </p>
+
+        <div style="margin-top: 14px;">
+          <label class="checkbox-row">
+            <input type="checkbox" id="opt-add-stroke">
+            <span>切り出した画像に白い輪郭線（白フチ）を付ける</span>
+          </label>
+          <p style="font-size: 0.8rem; color: #6b7280; margin-left: 28px; margin-top: 2px;">
+            LINEのダークモードや色付き背景でも絵文字が埋もれず、くっきり際立ちます。
+          </p>
+
+          <div class="sub-options" id="stroke-options" style="display: none;">
+            <label for="stroke-width-input" style="font-size: 0.9rem; font-weight: 600;">
+              白フチの太さ: <span id="stroke-val" style="color: var(--primary-color);">3</span>px
+            </label>
+            <input type="range" id="stroke-width-input" min="1" max="8" value="3" style="width: 150px; accent-color: var(--primary-color);">
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Canvas Area -->
+      <div class="canvas-container" id="canvas-container" style="display: none;">
+        <div class="canvas-toolbar">
+          <span class="tips" id="canvas-tips">
+            💡 赤い線をドラッグして微調整できます / マスクリックで除外可能
+          </span>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="btn-small" id="btn-reset-grid">📐 等分にリセット</button>
+            <button type="button" class="btn-small" id="btn-toggle-all">全選択 / 解除</button>
+            <button type="button" class="btn-small" id="btn-clear-free" style="display: none;">🗑️ 選択枠をクリア</button>
+          </div>
+        </div>
+        <div style="overflow: auto; max-height: 480px; text-align: center;">
+          <canvas id="preview-canvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div style="margin-top: 24px;">
+        <button type="button" class="btn btn-primary" id="convert-btn" disabled>
+          ✨ 絵文字に変換する
+        </button>
+      </div>
+    </main>
+
+    <!-- Results Section -->
+    <section class="card results-container" id="results-container">
+      <div class="results-header">
+        <div>
+          <h2 class="card-title" style="color: #06c755; margin-bottom: 4px;">🎉 変換が完了しました！</h2>
+          <p id="result-summary" style="color: #4b5563; font-size: 0.95rem;"></p>
+        </div>
+        <div>
+          <button type="button" class="btn btn-download" id="download-zip-btn" style="width: auto; padding: 12px 24px;">
+            📥 line_emoji.zip をダウンロード
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab Image Section -->
+      <div id="tab-preview-container"></div>
+
+      <!-- Emojis Grid Preview -->
+      <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; color: #374151;">
+        切り出された絵文字一覧（180×180px 透過PNG）
+      </h3>
+      <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 14px;">
+        👇 クリックすると、下の「LINEトーク画面」に文字と一緒に挿入されます！
+      </p>
+      <div class="emoji-grid" id="emoji-grid"></div>
+    </section>
+
+    <!-- LINE Chat Simulator Section -->
+    <section class="card line-sim-card" id="line-sim-card">
+      <div class="sim-header">
+        <div>
+          <h2 class="card-title" style="margin-bottom: 4px;">💬 LINEトーク仕上がりプレビュー</h2>
+          <p style="font-size: 0.9rem; color: var(--text-muted);">
+            実際のLINEトークルームでの見え方や白フチの視認性を確認できます。
+          </p>
+        </div>
+        <!-- Theme Colors -->
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 0.85rem; color: #6b7280; font-weight: 600;">背景テーマ:</span>
+          <div class="theme-selector">
+            <button type="button" class="theme-btn active" data-color="#8cabd9" style="background: #8cabd9;" title="LINE標準ブルー"></button>
+            <button type="button" class="theme-btn" data-color="#7ac788" style="background: #7ac788;" title="LINEグリーン"></button>
+            <button type="button" class="theme-btn" data-color="#191919" style="background: #191919;" title="ダークモード"></button>
+            <button type="button" class="theme-btn" data-color="#ffffff" style="background: #ffffff;" title="ホワイト"></button>
+            <button type="button" class="theme-btn" data-color="#f0f2f5" style="background: #f0f2f5;" title="薄グレー"></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Screen -->
+      <div class="chat-window" id="chat-window">
+        <div class="chat-messages" id="chat-messages">
+          <div class="chat-bubble bubble-other" id="sample-initial-msg">
+            絵文字できた？見せてみて！✨
+          </div>
+        </div>
+
+        <!-- Quick emoji dock -->
+        <div class="chat-emoji-dock-wrapper">
+          <span class="dock-label">絵文字挿入:</span>
+          <div class="chat-emoji-dock" id="chat-emoji-dock"></div>
+        </div>
+
+        <!-- Chat Input Bar -->
+        <div class="chat-input-bar">
+          <button type="button" class="sender-toggle is-mine" id="sender-toggle" title="クリックで送信者を自分/相手に切り替え">自分</button>
+          <div class="chat-input-editable" id="chat-input" contenteditable="true" data-placeholder="メッセージを入力（絵文字をクリックで文中に挿入）"></div>
+          <button type="button" class="chat-send-btn" id="chat-send-btn">送信</button>
+          <button type="button" class="btn-small" id="chat-clear-btn" style="background: transparent; color: #64748b; border: none; font-size: 1rem; padding: 4px;" title="トーク履歴をクリア">🗑️</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Specs Info Box -->
+    <div class="info-box">
+      <strong>💡 LINE絵文字の登録仕様メモ:</strong>
+      <ul>
+        <li><strong>絵文字画像:</strong> 180×180px、透過PNG。ZIP内には <code>001.png</code> 〜 <code>040.png</code> のように連番で出力されます。</li>
+        <li><strong>タブ画像:</strong> 96×74px、透過PNG。<code>tab.png</code> として1枚目の絵文字または選択した画像から自動生成されます。</li>
+        <li><strong>ZIPの構成:</strong> ZIP直下に画像ファイルがそのまま配置されるため、そのまま審査申請に利用できます。</li>
+      </ul>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
