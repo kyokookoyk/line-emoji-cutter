@@ -23,7 +23,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const canvasTips = document.getElementById("canvas-tips");
   const btnResetGrid = document.getElementById("btn-reset-grid");
   const btnToggleAll = document.getElementById("btn-toggle-all");
+  const btnUndoFree = document.getElementById("btn-undo-free");
   const btnClearFree = document.getElementById("btn-clear-free");
+  const freeBoxesList = document.getElementById("free-boxes-list");
   const convertBtn = document.getElementById("convert-btn");
 
   const resultsContainer = document.getElementById("results-container");
@@ -52,6 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let excludedCells = new Set();
 
   let freeBoxes = [];
+  let hoveredBoxIndex = -1;
   let isFreeDrawing = false;
   let freeDrawStart = null;
   let freeDrawCurrent = null;
@@ -124,6 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
     freeControlsPanel.style.display = "none";
     btnResetGrid.style.display = "inline-block";
     btnToggleAll.style.display = "inline-block";
+    btnUndoFree.style.display = "none";
     btnClearFree.style.display = "none";
     canvasTips.textContent = "💡 赤い線をドラッグして微調整できます / マスクリックで除外可能";
     renderCanvas();
@@ -138,9 +142,11 @@ document.addEventListener("DOMContentLoaded", () => {
     freeControlsPanel.style.display = "block";
     btnResetGrid.style.display = "none";
     btnToggleAll.style.display = "none";
+    btnUndoFree.style.display = "inline-block";
     btnClearFree.style.display = "inline-block";
-    canvasTips.textContent = "💡 画像上をドラッグして切り出したい枠を作成できます";
+    canvasTips.textContent = "💡 画像上をドラッグして枠を作成 / 右上の「×」または下のタグから個別に削除できます";
     renderCanvas();
+    renderFreeBoxesList();
     updateConvertButtonText();
   });
 
@@ -210,11 +216,66 @@ document.addEventListener("DOMContentLoaded", () => {
     updateConvertButtonText();
   });
 
+  // Free box removal
+  function deleteFreeBox(index) {
+    if (index >= 0 && index < freeBoxes.length) {
+      freeBoxes.splice(index, 1);
+      hoveredBoxIndex = -1;
+      renderCanvas();
+      renderFreeBoxesList();
+      updateConvertButtonText();
+    }
+  }
+
+  btnUndoFree.addEventListener("click", () => {
+    if (freeBoxes.length > 0) {
+      deleteFreeBox(freeBoxes.length - 1);
+    }
+  });
+
   btnClearFree.addEventListener("click", () => {
     freeBoxes = [];
+    hoveredBoxIndex = -1;
     renderCanvas();
+    renderFreeBoxesList();
     updateConvertButtonText();
   });
+
+  function renderFreeBoxesList() {
+    if (!freeBoxesList) return;
+    freeBoxesList.innerHTML = "";
+
+    if (freeBoxes.length === 0) {
+      freeBoxesList.innerHTML = '<span style="font-size: 0.8rem; color: #94a3b8;">選択された枠はありません</span>';
+      return;
+    }
+
+    freeBoxes.forEach((box, i) => {
+      const chip = document.createElement("span");
+      chip.className = "free-box-chip" + (hoveredBoxIndex === i ? " is-hovered" : "");
+      chip.innerHTML = `
+        <span>枠 #${String(i + 1).padStart(3, "0")}</span>
+        <button type="button" class="free-box-del-btn" title="この枠を削除">×</button>
+      `;
+
+      chip.addEventListener("mouseenter", () => {
+        hoveredBoxIndex = i;
+        renderCanvas();
+      });
+
+      chip.addEventListener("mouseleave", () => {
+        hoveredBoxIndex = -1;
+        renderCanvas();
+      });
+
+      chip.querySelector(".free-box-del-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteFreeBox(i);
+      });
+
+      freeBoxesList.appendChild(chip);
+    });
+  }
 
   optAddStroke.addEventListener("change", () => {
     strokeOptions.style.display = optAddStroke.checked ? "flex" : "none";
@@ -276,6 +337,17 @@ document.addEventListener("DOMContentLoaded", () => {
         updateConvertButtonText();
       }
     } else if (mode === "free") {
+      // Check if clicking on the delete button of an existing box
+      for (let i = freeBoxes.length - 1; i >= 0; i--) {
+        const b = freeBoxes[i];
+        const btnSize = 24;
+        const btnX = b.right - btnSize - 2;
+        const btnY = b.top + 2;
+        if (x >= btnX && x <= btnX + btnSize && y >= btnY && y <= btnY + btnSize) {
+          deleteFreeBox(i);
+          return;
+        }
+      }
       isFreeDrawing = true;
       freeDrawStart = { x, y };
       freeDrawCurrent = { x, y };
@@ -331,6 +403,7 @@ document.addEventListener("DOMContentLoaded", () => {
       freeDrawStart = null;
       freeDrawCurrent = null;
       renderCanvas();
+      renderFreeBoxesList();
       updateConvertButtonText();
     }
   }
@@ -463,21 +536,36 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (mode === "free") {
       freeBoxes.forEach((box, i) => {
         const { left, top, right, bottom } = box;
-        ctx.strokeStyle = "rgba(6, 199, 85, 0.95)";
-        ctx.lineWidth = 3;
+        const isHovered = (hoveredBoxIndex === i);
+
+        ctx.strokeStyle = isHovered ? "#eab308" : "rgba(6, 199, 85, 0.95)";
+        ctx.lineWidth = isHovered ? 4 : 3;
         ctx.strokeRect(left, top, right - left, bottom - top);
 
-        ctx.fillStyle = "rgba(6, 199, 85, 0.15)";
+        ctx.fillStyle = isHovered ? "rgba(234, 179, 8, 0.25)" : "rgba(6, 199, 85, 0.15)";
         ctx.fillRect(left, top, right - left, bottom - top);
 
+        // Number Badge (top-left)
         const label = String(i + 1).padStart(3, "0");
-        ctx.fillStyle = "#06c755";
+        ctx.fillStyle = isHovered ? "#ca8a04" : "#06c755";
         ctx.fillRect(left, top, 42, 22);
         ctx.fillStyle = "#ffffff";
         ctx.font = "bold 13px sans-serif";
         ctx.textBaseline = "middle";
         ctx.textAlign = "center";
         ctx.fillText(label, left + 21, top + 11);
+
+        // Delete "×" Button (top-right)
+        const btnSize = 22;
+        const btnX = right - btnSize - 2;
+        const btnY = top + 2;
+        ctx.fillStyle = "rgba(239, 68, 68, 0.9)";
+        ctx.fillRect(btnX, btnY, btnSize, btnSize);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 14px sans-serif";
+        ctx.textBaseline = "middle";
+        ctx.textAlign = "center";
+        ctx.fillText("×", btnX + btnSize / 2, btnY + btnSize / 2);
       });
 
       if (isFreeDrawing && freeDrawStart && freeDrawCurrent) {

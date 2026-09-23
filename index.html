@@ -76,8 +76,9 @@
       <!-- Mode B: Free Select Controls -->
       <div id="free-controls-panel" style="display: none; margin-top: 12px;">
         <p style="font-size: 0.95rem; color: #4b5563;">
-          🖱️ <strong>操作方法:</strong> 下の画像プレビュー上をドラッグ（またはスワイプ）して、切り出したい範囲（四角形）を自由に指定してください。複数指定できます。
+          🖱️ <strong>操作方法:</strong> 画像上をドラッグして枠を指定します。不要な枠は右上の「×」または下のタグから個別に削除できます。
         </p>
+        <div id="free-boxes-list" class="free-boxes-list"></div>
       </div>
 
       <!-- Processing Options -->
@@ -121,7 +122,8 @@
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
             <button type="button" class="btn-small" id="btn-reset-grid">📐 等分にリセット</button>
             <button type="button" class="btn-small" id="btn-toggle-all">全選択 / 解除</button>
-            <button type="button" class="btn-small" id="btn-clear-free" style="display: none;">🗑️ 選択枠をクリア</button>
+            <button type="button" class="btn-small" id="btn-undo-free" style="display: none;">↩️ 1つ戻す</button>
+            <button type="button" class="btn-small" id="btn-clear-free" style="display: none;">🗑️ すべてクリア</button>
           </div>
         </div>
         <div style="overflow: auto; max-height: 480px; text-align: center;">
